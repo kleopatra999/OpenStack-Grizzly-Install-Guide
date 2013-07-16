@@ -107,8 +107,7 @@ Status: Stable
 * Only one NIC should have an internet access::
 
   # eth0
-  # OpenStack Management network
-  auto eth0
+  # OpenStack Management networkauto eth0
   iface eth0 inet static 
   address 10.10.10.51
   netmask 255.255.255.0
