@@ -716,9 +716,10 @@ Status: Stable
    #Bridge the connection between eth2 and br-ex
    ovs-vsctl add-port br-ex eth2
 
-4. Compute Node (make sure to update the last octet of each IP)
+4. Compute Node 
 =========================
-There is a script in the private openstack-configs/scripts directory that will handle this process (except the SSH keys).
+* Make sure to update the last octet of each IP
+* There is a script in the private openstack-configs/scripts directory that will handle this process (except the SSH keys).
 
 4.1. Preparing the Node
 ------------------
