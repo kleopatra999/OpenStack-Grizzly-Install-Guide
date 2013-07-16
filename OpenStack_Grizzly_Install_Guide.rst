@@ -54,7 +54,7 @@ Status: Stable
 
 
 1. Requirements
-=============================== =======================================
+============================= ===================================
 
 :Node Role: NICs
 :Control Node (cloud): eth0 (10.10.10.51), eth1 ([lab_ip].51)
@@ -106,26 +106,27 @@ Status: Stable
 
 * Only one NIC should have an internet access::
 
-  # eth0
-  # OpenStack Management networkauto eth0
-  iface eth0 inet static 
-  address 10.10.10.51
-  netmask 255.255.255.0
+    # OpenStack Management Network
+    auto eth0
+    iface eth0 inet static
+    address 10.10.10.51
+    netmask 255.255.255.0
 
-  # QA Lab Network
-  # eth1 is currently bridged.
-  auto br0 
+    # QA Lab Network
+    # bridged between br0 and eth1
+    auto br0
 
-  iface br0 inet static
+    iface br0 inet static
     address [lab_ip].51
     netmask 255.255.255.0
     gateway [lab_ip].1
     dns-nameservers [dns1] [dns2]
     bridge_ports eth1
 
-  iface eth1 inet manual
-  up ip link set $IFACE up promisc on
-  down up link set $IFACE down promisc off 
+    iface eth1 inet manual
+      up ip link set $IFACE up promisc on
+      down up link set $IFACE down promisc off
+    
 
 * Restart the networking service::
 
