@@ -2,13 +2,17 @@
   OpenStack Grizzly Install Guide
 ==========================================================
 
-:Version: 2.0
-:Source: https://github.com/mseknibilel/OpenStack-Grizzly-Install-Guide
+:Version: 2.1
+:Source: https://github.com/behance/OpenStack-Grizzly-Install-Guide
 :Keywords: Multi node, Grizzly, Quantum, Nova, Keystone, Glance, Horizon, Cinder, OpenVSwitch, KVM, Ubuntu Server 12.04/13.04 (64 bits).
 
 Authors
 ==========
 
+Behance:
+`Chris Fortier <http://www.linkedin.com/in/fortierchris>`_
+
+Original:
 `Bilel Msekni <http://www.linkedin.com/profile/view?id=136237741&trk=tab_pro>`_ 
 
 Contributors
@@ -53,25 +57,38 @@ Status: Stable
 ====================
 
 :Node Role: NICs
-:Control Node: eth0 (10.10.10.51), eth1 (192.168.100.51)
-:Network Node: eth0 (10.10.10.52), eth1 (10.20.20.52), eth2 (192.168.100.52)
-:Compute Node: eth0 (10.10.10.53), eth1 (10.20.20.53)
+:Control Node (cloud): eth0 (10.10.10.51), eth1 ([lab_ip].51)
+:Network Node (netnode): eth0 (10.10.10.52), eth1 (10.20.20.52), eth2 ([lab_ip].52)
+:Compute Node (hub01): eth0 (10.10.10.53), eth1 (10.20.20.53), eth2 ([lab_ip].53)
+:Compute Node (hub02): eth0 (10.10.10.54), eth1 (10.20.20.54), eth2 ([lab_ip].54)
 
 **Note 1:** Always use dpkg -s <packagename> to make sure you are using grizzly packages (version : 2013.1)
 
-**Note 2:** This is my current network architecture, you can add as many compute node as you wish.
+**Note 2:** Due to restrictive corporate firewall/networking rules we have added all OpenStack machines to our internal lab network. For the sake of security, and static IP addresses are replaced with [lab_ip]
+
+**Note 3:** The diagram below is the one from the original guide and is about 90% accurate to our configuration.
 
 .. image:: http://i.imgur.com/Frsughe.jpg
+
+**Note 4:** To make configuration backups easier we have modified the directories from the usual guides. Our process is as follows:
+        1) Create a github repo called openstack-configs
+        2) Git clone that repo in to /opt
+        3) Create a directory for each machine. Like /opt/openstack-configs/[machine_name]
+        4) Install each package as described (most install to /etc/[module])
+        5) Move each modules directory to /opt/openstack-configs/[machine_name]/etc/[module]
+        6) Symlink that directoy back to /etc
+        7) You will end up something like: /etc/quantum -> /opt/openstack-config/hub01/etc/quantum/
+        8) This way you can update and commit configs to github.
 
 2. Controller Node
 ===============
 
 2.1. Preparing Ubuntu
 -----------------
-
-* After you install Ubuntu 12.04 or 13.04 Server 64bits, Go in sudo mode and don't leave it until the end of this guide::
-
-   sudo su
+* Install Ubuntu 12.04.2::
+    
+    Make sure to install OpenSSH
+    Set time zone to UTC
 
 * Add Grizzly repositories [Only for Ubuntu 12.04]::
 
@@ -89,19 +106,27 @@ Status: Stable
 
 * Only one NIC should have an internet access::
 
-   #For Exposing OpenStack API over the internet
-   auto eth1
-   iface eth1 inet static
-   address 192.168.100.51
-   netmask 255.255.255.0
-   gateway 192.168.100.1
-   dns-nameservers 8.8.8.8
+  # eth0
+  # OpenStack Management network
+  auto eth0
+  iface eth0 inet static 
+  address 10.10.10.51
+  netmask 255.255.255.0
 
-   #Not internet connected(used for OpenStack management)
-   auto eth0
-   iface eth0 inet static
-   address 10.10.10.51
-   netmask 255.255.255.0
+  # QA Lab Network
+  # eth1 is currently bridged.
+  auto br0 
+
+  iface br0 inet static
+    address [lab_ip].51
+    netmask 255.255.255.0
+    gateway [lab_ip].1
+    dns-nameservers [dns1] [dns2]
+    bridge_ports eth1
+
+  iface eth1 inet manual
+  up ip link set $IFACE up promisc on
+  down up link set $IFACE down promisc off 
 
 * Restart the networking service::
 
@@ -130,7 +155,7 @@ Status: Stable
 
    apt-get install -y ntp
 
-* Create these databases::
+* Create these databases (replace with appropriate passwords)::
 
    mysql -u root -p
    
@@ -199,18 +224,18 @@ Status: Stable
    ./keystone_basic.sh
    ./keystone_endpoints_basic.sh
 
-* Create a simple credential file and load it so you won't be bothered later::
+* Create a simple admin credential file and load it so you won't be bothered later::
 
-   nano creds
+   vi ~/OPENRC-admin
 
    #Paste the following:
    export OS_TENANT_NAME=admin
    export OS_USERNAME=admin
-   export OS_PASSWORD=admin_pass
-   export OS_AUTH_URL="http://192.168.100.51:5000/v2.0/"
+   export OS_PASSWORD=<ADMIN-PASSWORD>
+   export OS_AUTH_URL="http://10.10.10.51:5000/v2.0/"
 
    # Load it:
-   source creds
+   source ~/OPENRC-admin
 
 * To test Keystone, we use a simple CLI command::
 
@@ -233,7 +258,7 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = glance
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
 
 * Update the /etc/glance/glance-registry-paste.ini with::
 
@@ -244,11 +269,11 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = glance
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
 
 * Update /etc/glance/glance-api.conf with::
 
-   sql_connection = mysql://glanceUser:glancePass@10.10.10.51/glance
+   sql_connection = mysql://glanceUser:<GLANCE-PASSWORD>@10.10.10.51/glance
 
 * And::
 
@@ -257,7 +282,7 @@ Status: Stable
    
 * Update the /etc/glance/glance-registry.conf with::
 
-   sql_connection = mysql://glanceUser:glancePass@10.10.10.51/glance
+   sql_connection = mysql://glanceUser:<GLANCE-PASSWORD>@10.10.10.51/glance
 
 * And::
 
@@ -291,7 +316,7 @@ Status: Stable
 
    #Under the database section
    [DATABASE]
-   sql_connection = mysql://quantumUser:quantumPass@10.10.10.51/quantum
+   sql_connection = mysql://quantumUser:<QUANTUM-PASSWORD>@10.10.10.51/quantum
 
    #Under the OVS section
    [OVS]
@@ -312,7 +337,7 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = quantum
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
 
 * Update the /etc/quantum/quantum.conf::
 
@@ -322,7 +347,7 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = quantum
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD> 
    signing_dir = /var/lib/quantum/keystone-signing
 
 * Restart the quantum server::
@@ -345,7 +370,7 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = nova
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
    signing_dirname = /tmp/keystone-signing-nova
    # Workaround for https://bugs.launchpad.net/nova/+bug/1154809
    auth_version = v2.0
@@ -361,7 +386,7 @@ Status: Stable
    compute_scheduler_driver=nova.scheduler.simple.SimpleScheduler
    rabbit_host=10.10.10.51
    nova_url=http://10.10.10.51:8774/v1.1/
-   sql_connection=mysql://novaUser:novaPass@10.10.10.51/nova
+   sql_connection=mysql://novaUser:<NOVA-PASSWORD>@10.10.10.51/nova
    root_helper=sudo nova-rootwrap /etc/nova/rootwrap.conf
 
    # Auth
@@ -374,7 +399,7 @@ Status: Stable
 
    # Vnc configuration
    novnc_enabled=true
-   novncproxy_base_url=http://192.168.100.51:6080/vnc_auto.html
+   novncproxy_base_url=http://[lab_ip].51:6080/vnc_auto.html
    novncproxy_port=6080
    vncserver_proxyclient_address=10.10.10.51
    vncserver_listen=0.0.0.0
@@ -385,7 +410,7 @@ Status: Stable
    quantum_auth_strategy=keystone
    quantum_admin_tenant_name=service
    quantum_admin_username=quantum
-   quantum_admin_password=service_pass
+   quantum_admin_password=<QUANTUM-PASSWORD>
    quantum_admin_auth_url=http://10.10.10.51:35357/v2.0
    libvirt_vif_driver=nova.virt.libvirt.vif.LibvirtHybridOVSBridgeDriver
    linuxnet_interface_driver=nova.network.linux_net.LinuxOVSInterfaceDriver
@@ -414,9 +439,9 @@ Status: Stable
 
    cd /etc/init.d/; for i in $( ls nova-* ); do sudo service $i restart; done   
 
-* Check for the smiling faces on nova-* services to confirm your installation::
+* Check that all of the nova services are UP to confirm your installation::
 
-   nova-manage service list
+   nova service-list
 
 2.10. Cinder
 --------------
@@ -439,21 +464,21 @@ Status: Stable
    [filter:authtoken]
    paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory
    service_protocol = http
-   service_host = 192.168.100.51
+   service_host = [lab_ip].51
    service_port = 5000
    auth_host = 10.10.10.51
    auth_port = 35357
    auth_protocol = http
    admin_tenant_name = service
    admin_user = cinder
-   admin_password = service_pass
+   admin_password = <CINDER-PASSWORD>
    signing_dir = /var/lib/cinder
 
 * Edit the /etc/cinder/cinder.conf to::
 
    [DEFAULT]
    rootwrap_config=/etc/cinder/rootwrap.conf
-   sql_connection = mysql://cinderUser:cinderPass@10.10.10.51/cinder
+   sql_connection = mysql://cinderUser:<CINDER-PASSWORD>@10.10.10.51/cinder
    api_paste_config = /etc/cinder/api-paste.ini
    iscsi_helper=ietadm
    volume_name_template = volume-%s
@@ -517,10 +542,6 @@ Status: Stable
 3.1. Preparing the Node
 ------------------
 
-* After you install Ubuntu 12.04 or 13.04 Server 64bits, Go in sudo mode::
-
-   sudo su
-
 * Add Grizzly repositories [Only for Ubuntu 12.04]::
 
    apt-get install -y ubuntu-cloud-keyring 
@@ -565,23 +586,33 @@ Status: Stable
 
 * 3 NICs must be present::
    
-   # OpenStack management
-   auto eth0
-   iface eth0 inet static
-   address 10.10.10.52
-   netmask 255.255.255.0
+    # OpenStack Management Network
+    auto eth0
+    iface eth0 inet static
+    address 10.10.10.52
+    netmask 255.255.255.0
 
-   # VM Configuration
-   auto eth1
-   iface eth1 inet static
-   address 10.20.20.52
-   netmask 255.255.255.0
+    # VM Network
+    auto eth1
+    iface eth1 inet static
+    address 10.20.20.52
+    netmask 255.255.255.0
 
-   # VM internet Access
-   auto eth2
-   iface eth2 inet static
-   address 192.168.100.52
-   netmask 255.255.255.0
+    # Office Lan
+    auto eth2
+    iface eth2 inet manual
+    up ifconfig $IFACE 0.0.0.0 up
+    up ip link set $IFACE promisc on
+    down ip link set $IFACE promisc off
+    down ifconfig $IFACE down
+
+    # br-ex
+    auto br-ex
+    iface br-ex inet static
+    address [lab_ip].52
+    gateway [lab_ip].1
+    dns-nameservers [dns1] [dns2]
+    netmask 255.255.255.0
 
 3.4. OpenVSwitch (Part1)
 ------------------
@@ -614,13 +645,13 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = quantum
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
 
 * Edit the OVS plugin configuration file /etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini with:: 
 
    #Under the database section
    [DATABASE]
-   sql_connection = mysql://quantumUser:quantumPass@10.10.10.51/quantum
+   sql_connection = mysql://quantumUser=<QUANTUM-PASSWORD>@10.10.10.51/quantum
 
    #Under the OVS section
    [OVS]
@@ -642,7 +673,7 @@ Status: Stable
    auth_region = RegionOne
    admin_tenant_name = service
    admin_user = quantum
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
 
    # IP address used by Nova metadata server
    nova_metadata_ip = 10.10.10.51
@@ -664,10 +695,10 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = quantum
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
    signing_dir = /var/lib/quantum/keystone-signing
 
-* Edit /etc/sudoers/sudoers.d/quantum_sudoers to give it full access like this (This is unfortunatly mandatory) ::
+* Edit /etc/sudoers/sudoers.d/quantum_sudoers to give it full access like this (This is unfortunately mandatory) ::
 
    nano /etc/sudoers/sudoers.d/quantum_sudoers
    
@@ -680,38 +711,22 @@ Status: Stable
 
 3.4. OpenVSwitch (Part2)
 ------------------
-* Edit the eth2 in /etc/network/interfaces to become like this::
-
-   # VM internet Access
-   auto eth2
-   iface eth2 inet manual
-   up ifconfig $IFACE 0.0.0.0 up
-   up ip link set $IFACE promisc on
-   down ip link set $IFACE promisc off
-   down ifconfig $IFACE down
-
 * Add the eth2 to the br-ex::
 
-   #Internet connectivity will be lost after this step but this won't affect OpenStack's work
+   #Bridge the connection between eth2 and br-ex
    ovs-vsctl add-port br-ex eth2
 
-   #If you want to get internet connection back, you can assign the eth2's IP address to the br-ex in the /etc/network/interfaces file.
-
-4. Compute Node
+4. Compute Node (make sure to update the last octet of each IP)
 =========================
+There is a script in the private openstack-configs/scripts directory that will handle this process (except the SSH keys).
 
 4.1. Preparing the Node
 ------------------
-
-* After you install Ubuntu 12.04 or 13.04 Server 64bits, Go in sudo mode::
-
-   sudo su
 
 * Add Grizzly repositories [Only for Ubuntu 12.04]::
 
    apt-get install -y ubuntu-cloud-keyring 
    echo deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main >> /etc/apt/sources.list.d/grizzly.list
-
 
 * Update your system::
 
@@ -751,20 +766,28 @@ Status: Stable
 
 4.2.Networking
 ------------
+**NOTE:** We in to a problem upgrading to Grizzly-3 and received an error that OVS failed to create a patch port. Recompiling OVS solved the issue: https://ask.openstack.org/question/1427/ovs-plugin-error-failed-to-create-ovs-patch-port/ 
 
 * Perform the following::
-   
-   # OpenStack management
-   auto eth0
-   iface eth0 inet static
-   address 10.10.10.53
-   netmask 255.255.255.0
+    # OpenStack Management Network
+    auto eth0
+    iface eth0 inet static
+    address 10.10.10.53
+    netmask 255.255.255.0
 
-   # VM Configuration
-   auto eth1
-   iface eth1 inet static
-   address 10.20.20.53
-   netmask 255.255.255.0
+    # VM Configuration
+    auto eth1
+    iface eth1 inet static
+    address 10.20.20.53
+    netmask 255.255.255.0
+
+    # office lan
+    auto eth2
+    iface eth2 inet static
+    address [lab_ip].53
+    netmask 255.255.255.0
+    dns-nameservers [dns1] [dns2]
+    gateway [lab_ip].1
 
 4.3 KVM
 ------------------
@@ -833,7 +856,7 @@ Status: Stable
 
    #Under the database section
    [DATABASE]
-   sql_connection = mysql://quantumUser:quantumPass@10.10.10.51/quantum
+   sql_connection = mysql://quantumUser:<QUANTUM-PASSWORD>@10.10.10.51/quantum
 
    #Under the OVS section
    [OVS]
@@ -860,7 +883,7 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = quantum
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
    signing_dir = /var/lib/quantum/keystone-signing
 
 * Restart all the services::
@@ -883,7 +906,7 @@ Status: Stable
    auth_protocol = http
    admin_tenant_name = service
    admin_user = nova
-   admin_password = service_pass
+   admin_password = <ADMIN-PASSWORD>
    signing_dirname = /tmp/keystone-signing-nova
    # Workaround for https://bugs.launchpad.net/nova/+bug/1154809
    auth_version = v2.0
@@ -908,7 +931,7 @@ Status: Stable
    compute_scheduler_driver=nova.scheduler.simple.SimpleScheduler
    rabbit_host=10.10.10.51
    nova_url=http://10.10.10.51:8774/v1.1/
-   sql_connection=mysql://novaUser:novaPass@10.10.10.51/nova
+   sql_connection=mysql://novaUser:<NOVA-PASSWORD>@10.10.10.51/nova
    root_helper=sudo nova-rootwrap /etc/nova/rootwrap.conf
 
    # Auth
@@ -921,7 +944,7 @@ Status: Stable
 
    # Vnc configuration
    novnc_enabled=true
-   novncproxy_base_url=http://192.168.100.51:6080/vnc_auto.html
+   novncproxy_base_url=http://[lab_ip].51:6080/vnc_auto.html
    novncproxy_port=6080
    vncserver_proxyclient_address=10.10.10.53
    vncserver_listen=0.0.0.0
@@ -932,7 +955,7 @@ Status: Stable
    quantum_auth_strategy=keystone
    quantum_admin_tenant_name=service
    quantum_admin_username=quantum
-   quantum_admin_password=service_pass
+   quantum_admin_password=<ADMIN-PASSWORD>
    quantum_admin_auth_url=http://10.10.10.51:35357/v2.0
    libvirt_vif_driver=nova.virt.libvirt.vif.LibvirtHybridOVSBridgeDriver
    linuxnet_interface_driver=nova.network.linux_net.LinuxOVSInterfaceDriver
@@ -962,6 +985,21 @@ Status: Stable
 
    nova-manage service list
 
+* Configure SSH Keys for Migrations::
+    
+    #Append to /etc/ssh/sshd_config
+    AllowUsers root nova
+
+    #Update password for nova
+    passwd nova
+
+    #in ~nova/.ssh
+    - add public/private key
+    - update authorized_keys. Make sure that the key for each compute node is listed
+    - chown nova:nova ~nova/.ssh/*
+    - update ~nova/.ssh/config with:
+    - SSH to each compute node to make sure it connects.
+    - Make sure other compute nodes can SSH to this machine    
 
 5. Your first VM
 ================
@@ -1006,7 +1044,7 @@ To start your first VM, we first need to create a new tenant, user and internal 
 
    quantum net-create --tenant-id $put_id_of_admin_tenant ext_net --router:external=True
 
-* Create a subnet for the floating ips::
+* Create a subnet for the floating ips (adjust addresses based on current network)::
 
    quantum subnet-create --tenant-id $put_id_of_admin_tenant --allocation-pool start=192.168.100.102,end=192.168.100.126 --gateway 192.168.100.1 ext_net 192.168.100.100/24 --enable_dhcp=False
 
@@ -1022,7 +1060,7 @@ To start your first VM, we first need to create a new tenant, user and internal 
    export OS_TENANT_NAME=project_one
    export OS_USERNAME=user_one
    export OS_PASSWORD=user_one
-   export OS_AUTH_URL="http://192.168.100.51:5000/v2.0/"
+   export OS_AUTH_URL="http://[lab_ip].51:5000/v2.0/"
 
    source creds_proj_one
 
@@ -1059,7 +1097,9 @@ To view a copy of this license, visit [ http://creativecommons.org/licenses/by/3
 
 7. Contacts
 ===========
+Chris Fortier : fortier@adobe.com
 
+Original Author-
 Bilel Msekni  : bilel.msekni@gmail.com
 
 8. Credits

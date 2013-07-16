@@ -1,12 +1,8 @@
 OpenStack-Grizzly-Install-Guide
 ===============================
 
-You want to install OpenStack Grizzly and you don't know how ?
-This is what you are looking for !
+The original version of this guide was used to build a private OpenStack Cloud for the Behance Dev Team.
 
-It's easy, simple and tested. Can't wait? Go check it out by yourself: 
-
-![ScreenShot](http://i.imgur.com/kTXM6F3.jpg)
 
 Guide Branch  | Single/Multi Node | Quantum plugin  | Direct Guide Link                                                                                              |
 ------------- | ----------------- | --------------- | ------------------                                                                                             |
