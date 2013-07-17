@@ -80,6 +80,8 @@ Status: Stable
         7) You will end up something like: /etc/quantum -> /opt/openstack-config/hub01/etc/quantum/
         8) This way you can update and commit configs to github.
 
+**Note 5:** OpenStack produces a large amount of logs that are very helpful in troubleshooting issues. To make it slightly easier to view, we have created a /var/log/openstack directory on each machine. We then symlink each openstack log directory in to here so that we can tail all of the logs per machine at once.
+
 2. Controller Node
 ===============
 
