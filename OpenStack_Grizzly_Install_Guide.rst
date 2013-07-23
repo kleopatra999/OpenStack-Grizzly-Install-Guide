@@ -1024,7 +1024,7 @@ To start your first VM, we first need to create a new tenant, user and internal 
 
 * Create a new subnet inside the new tenant network::
 
-   quantum subnet-create --tenant-id $put_id_of_project_one net_proj_one 50.50.1.0/24
+   quantum subnet-create --tenant-id $put_id_of_project_one net_proj_one 172.17.1.0/24 --name=projone_subnet
 
 * Create a router for the new tenant::
 
@@ -1037,23 +1037,23 @@ To start your first VM, we first need to create a new tenant, user and internal 
 
 * Add the router to the subnet::
 
-   quantum router-interface-add $put_router_proj_one_id_here $put_subnet_id_here
+   quantum router-interface-add router_proj_one projone_subnet
 
 * Restart all quantum services::
 
-   cd /etc/init.d/; for i in $( ls quantum-* ); do sudo service $i restart; done
+   for i in $( ls /etc/init.d/quantum-* ); do sudo service $(basename $i) restart; done
 
 * Create an external network with the tenant id belonging to the admin tenant (keystone tenant-list to get the appropriate id)::
 
-   quantum net-create --tenant-id $put_id_of_admin_tenant ext_net --router:external=True
+   quantum net-create --tenant-id $<ADMIN_TENANT_ID> ext_net --router:external=True
 
 * Create a subnet for the floating ips (adjust addresses based on current network)::
 
-   quantum subnet-create --tenant-id $put_id_of_admin_tenant --allocation-pool start=192.168.100.102,end=192.168.100.126 --gateway 192.168.100.1 ext_net 192.168.100.100/24 --enable_dhcp=False
+   quantum subnet-create --tenant-id $<ADMIN_TENANT_ID>  --allocation-pool start=192.168.100.102,end=192.168.100.126 --gateway 192.168.100.1 ext_net 192.168.100.100/24 --enable_dhcp=False --name=ext_subnet
 
 * Set your router's gateway to the external network:: 
 
-   quantum router-gateway-set $put_router_proj_one_id_here $put_id_of_ext_net_here
+   quantum router-gateway-set router_proj_one ext_subnet
 
 * Source creds relative to your project one tenant now::
 
